@@ -1,119 +1,123 @@
 import streamlit as st
 import pandas as pd
 
-st.set_page_config(page_title="競馬アプリ（復旧版）", layout="wide")
+st.set_page_config(page_title="競馬アプリ（安定版）", layout="wide")
 
 # ---------------------------------------------------
-# 🐎 デモ用のベースデータ
+# デモ用データ（しばらくはこのままでOK）
 # ---------------------------------------------------
-BASE_HORSES = [
+demo_horses = [
     {"枠": 1, "馬番": 1, "馬名": "サンプルホースA", "性齢": "牡4", "斤量": 55.0, "騎手": "川田"},
     {"枠": 2, "馬番": 2, "馬名": "サンプルホースB", "性齢": "牝3", "斤量": 53.0, "騎手": "ルメール"},
     {"枠": 3, "馬番": 3, "馬名": "サンプルホースC", "性齢": "牡5", "斤量": 57.0, "騎手": "武豊"},
 ]
-
-def get_base_df() -> pd.DataFrame:
-    """常にクリーンな出馬表データを返す（印など一切なし）"""
-    return pd.DataFrame(BASE_HORSES)
+df_demo = pd.DataFrame(demo_horses)
 
 # ---------------------------------------------------
-# 🔖 セッションステート初期化
+# メニュー（今は1画面だけだが将来拡張用）
 # ---------------------------------------------------
-MARK_CHOICES = ["", "◎", "◯", "▲", "△", "×", "⭐︎"]
+st.title("競馬アプリ（安定版 UI テスト）")
+menu = st.radio("メニュー選択", ["解析画面"], horizontal=True, key="main_menu")
 
-if "marks" not in st.session_state:
-    st.session_state.marks = [""] * len(BASE_HORSES)
+if menu == "解析画面":
 
-if "manual_scores" not in st.session_state:
-    st.session_state.manual_scores = [50] * len(BASE_HORSES)
+    # ---------------------------------------------------
+    # 5タブ構成
+    # ---------------------------------------------------
+    tab_shutuba, tab_score, tab_ai, tab_baken, tab_info = st.tabs(
+        ["出馬表", "スコア", "AIスコア", "馬券", "基本情報"]
+    )
 
-# ---------------------------------------------------
-# 📌 タブ
-# ---------------------------------------------------
-tab_shutuba, tab_score, tab_ai, tab_baken, tab_info = st.tabs(
-    ["出馬表", "スコア", "AIスコア", "馬券", "基本情報"]
-)
+    # ---------------------------------------------------
+    # 出馬表タブ：印セレクト + 出馬表に印カラム
+    # ---------------------------------------------------
+    with tab_shutuba:
+        st.subheader("出馬表 ＋ 印入力")
 
-# ---------------------------------------------------
-# 🐴 出馬表タブ（ここにだけ印が存在）
-# ---------------------------------------------------
-with tab_shutuba:
-    st.subheader("🐴 出馬表（印つき）")
+        marks = ["", "◎", "◯", "▲", "△", "×", "⭐︎"]
 
-    df_shutuba = get_base_df()
-    df_shutuba["印"] = ""  # 空の印列
+        # 🔹 セッションステートの初期化（ここでだけやる）
+        if "marks" not in st.session_state:
+            st.session_state.marks = {idx: "" for idx in df_demo.index}
 
-    updated_marks = []
-    for i, row in df_shutuba.iterrows():
-        col1, col2 = st.columns([4, 2])
-        with col1:
-            st.write(f"{row['馬名']}（{row['枠']}枠{row['馬番']}番）")
-        with col2:
-            val = st.selectbox(
-                "印",
-                MARK_CHOICES,
-                key=f"mark_{i}",
-                index=MARK_CHOICES.index(st.session_state.marks[i]),
+        st.markdown("#### 印の入力")
+
+        # 馬ごとに印セレクトボックスを表示
+        for idx, row in df_demo.iterrows():
+            key = f"mark_{idx}"
+            # 初期値をセッションから取得（無ければ空文字）
+            default_val = st.session_state.marks.get(idx, "")
+            default_index = marks.index(default_val) if default_val in marks else 0
+
+            selected = st.selectbox(
+                f"{row['馬名']} の印",
+                marks,
+                index=default_index,
+                key=key,
             )
-        updated_marks.append(val)
+            # セッション側の管理用 dict も更新
+            st.session_state.marks[idx] = selected
 
-    st.session_state.marks = updated_marks
-    df_shutuba["印"] = st.session_state.marks
+        # 出馬表に「印」カラムを追加
+        df_with_mark = df_demo.copy()
+        df_with_mark["印"] = [
+            st.session_state.marks.get(idx, "") for idx in df_demo.index
+        ]
 
-    st.dataframe(df_shutuba, use_container_width=True, hide_index=True)
+        st.markdown("#### 印付き出馬表（確認用）")
+        st.dataframe(df_with_mark, width="stretch")
 
-# ---------------------------------------------------
-# 🔢 スコアタブ（印を強制排除）
-# ---------------------------------------------------
-with tab_score:
-    st.subheader("🔢 手動スコア入力（印なし）")
-    st.write("※ このタブでは印は一切表示されません。")
+    # ---------------------------------------------------
+    # スコアタブ：手動スコアのみ（印は一切出さない）
+    # ---------------------------------------------------
+    with tab_score:
+        st.subheader("手動スコア入力")
 
-    df_score = get_base_df()
+        # セッションステート初期化（スコア用）
+        if "manual_scores" not in st.session_state:
+            st.session_state.manual_scores = [50] * len(df_demo)
 
-    # 万が一「印」列が混入しても絶対に消す
-    if "印" in df_score.columns:
-        df_score = df_score.drop(columns=["印"])
+        new_scores = []
 
-    # 表示したい列だけに絞る（念のため）
-    columns_allowed = ["枠", "馬番", "馬名", "性齢", "斤量", "騎手"]
-    df_score = df_score[columns_allowed]
+        st.markdown("#### 馬ごとのスコア入力")
+        for idx, row in df_demo.iterrows():
+            score = st.number_input(
+                f"{row['馬名']} のスコア",
+                min_value=0,
+                max_value=100,
+                value=st.session_state.manual_scores[idx],
+                key=f"manual_score_{idx}",
+            )
+            new_scores.append(score)
 
-    new_scores = []
-    for idx, row in df_score.iterrows():
-        val = st.number_input(
-            f"{row['馬名']} のスコア",
-            min_value=0,
-            max_value=100,
-            value=int(st.session_state.manual_scores[idx]),
-            key=f"score_{idx}",
-        )
-        new_scores.append(val)
+        # 更新
+        st.session_state.manual_scores = new_scores
 
-    st.session_state.manual_scores = new_scores
-    df_score["手動スコア"] = st.session_state.manual_scores
+        # スコア付きの確認用テーブル（印は表示しない）
+        df_score = df_demo.copy()
+        df_score["手動スコア"] = st.session_state.manual_scores
 
-    st.dataframe(df_score, use_container_width=True, hide_index=True)
+        st.markdown("#### スコア付き出馬表（確認用）")
+        st.dataframe(df_score, width="stretch")
 
-# ---------------------------------------------------
-# 🤖 AIスコアタブ
-# ---------------------------------------------------
-with tab_ai:
-    st.subheader("🤖 AIスコア（デモ）")
-    st.info("AIスコアはここに表示されます。（仮データ）")
-    df_ai = get_base_df()
-    st.dataframe(df_ai, use_container_width=True, hide_index=True)
+    # ---------------------------------------------------
+    # AIスコアタブ：仮表示
+    # ---------------------------------------------------
+    with tab_ai:
+        st.subheader("AIスコア（仮）")
+        st.info("ここにAI算出スコアを表示予定です。（今はデモ表示）")
+        st.dataframe(df_demo, width="stretch")
 
-# ---------------------------------------------------
-# 🎫 馬券タブ
-# ---------------------------------------------------
-with tab_baken:
-    st.subheader("🎫 馬券シミュレーション（デモ）")
-    st.write("ここに馬券機能が入ります。")
+    # ---------------------------------------------------
+    # 馬券タブ：仮表示
+    # ---------------------------------------------------
+    with tab_baken:
+        st.subheader("馬券シミュレーション（仮）")
+        st.write("ここに、印やスコアを使った馬券シミュレーションを実装予定です。")
 
-# ---------------------------------------------------
-# 📘 基本情報タブ
-# ---------------------------------------------------
-with tab_info:
-    st.subheader("📘 レース基本情報（デモ）")
-    st.write("ここにレース情報を表示します。")
+    # ---------------------------------------------------
+    # 基本情報タブ：仮表示
+    # ---------------------------------------------------
+    with tab_info:
+        st.subheader("レース基本情報（仮）")
+        st.write("ここにレース名・開催場・距離・天候などの情報を表示予定です。")
