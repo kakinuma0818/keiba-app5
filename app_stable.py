@@ -36,16 +36,13 @@ def parse_race_id(text):
     """URL or 12桁 race_id を認識して race_id を返す"""
     text = text.strip()
 
-    # race_id=xxxx 形式
     m = re.search(r"race_id=(\d{12})", text)
     if m:
         return m.group(1)
 
-    # 単なる12桁
     if re.fullmatch(r"\d{12}", text):
         return text
 
-    # URL中の12桁
     m2 = re.search(r"(\d{12})", text)
     if m2:
         return m2.group(1)
@@ -64,29 +61,24 @@ def fetch_shutuba(race_id: str):
     if r.status_code != 200:
         return None, None
 
-    # 文字化け回避
-    r.encoding = r.apparent_encoding
-
+    r.encoding = r.apparent_encoding  # 文字化け回避
     soup = BeautifulSoup(r.text, "html.parser")
 
-    # ------------------------------
-    # レース名・情報
-    ------------------------------
+    # レース名
     race_name = soup.select_one(".RaceName")
     race_name = race_name.get_text(strip=True) if race_name else "レース名取得不可"
 
+    # レース情報
     race_info = soup.select_one(".RaceData01")
     race_info = race_info.get_text(" ", strip=True) if race_info else ""
 
-    # 頭数抽出
+    # 頭数
     n = None
     m_n = re.search(r"(\d+)頭", r.text)
     if m_n:
         n = int(m_n.group(1))
 
-    # ------------------------------
     # 出馬表テーブル
-    # ------------------------------
     table = soup.select_one("table.RaceTable01")
     if table is None:
         return None, {
@@ -104,7 +96,6 @@ def fetch_shutuba(race_id: str):
         def tx(i):
             return tds[i].get_text(strip=True) if i < len(tds) else ""
 
-        # 列構造は netkeiba 固定なので位置で取る
         row = {
             "枠": tx(0),
             "馬番": tx(1),
@@ -170,7 +161,7 @@ with tab1:
     if df_loaded is None:
         st.info("まだ出馬表が読み込まれていません。")
     else:
-        # 印セレクト（表示されるのはここだけ）
+        # 印セレクト
         marks = ["", "◎", "○", "▲", "△", "⭐︎", "×"]
 
         if "marks" not in st.session_state:
@@ -203,7 +194,6 @@ with tab2:
     if df_loaded is None:
         st.info("まだ出馬表が読み込まれていません。")
     else:
-        # 手動スコアのみ
         if "manual_scores" not in st.session_state:
             st.session_state.manual_scores = [50] * len(df_loaded)
 
